@@ -1,0 +1,12 @@
+{
+  "name": "tunesmith",
+  "private": true,
+  "version": "1.0.0",
+  "description": "One-page AI music generator powered by the Suno API, deployable on Netlify.",
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
