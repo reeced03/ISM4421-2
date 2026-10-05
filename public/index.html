@@ -283,8 +283,27 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px
 .auth-links { display: flex; justify-content: space-between; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 .linkish { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 13px; font-weight: 500; }
 .linkish:disabled { color: var(--muted); cursor: default; }
-.user-chip { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13px; }
-@media (max-width: 640px) { .user-chip { display: none; } }
+.avatar {
+  width: 28px; height: 28px; border-radius: 50%; flex: none; overflow: hidden;
+  display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 12px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar.lg { width: 88px; height: 88px; font-size: 32px; }
+.profile-btn { padding: 4px 12px 4px 4px; border-radius: 999px; }
+.profile-btn .name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 640px) {
+  .profile-btn .name, #signOutBtn { display: none; }
+  .profile-btn { padding: 4px; }
+}
+@media (max-width: 440px) { .brand .name { display: none; } }
+.dlg-actions .push { margin-right: auto; }
+
+.avatar-row { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+.avatar-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.avatar-actions .hint { width: 100%; margin: 0; }
+.genre-chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--text); font-weight: 600; }
+.signed-as { font-size: 12px; color: var(--muted); margin: -8px 0 16px; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -295,7 +314,9 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px
     <div class="spacer"></div>
     <span class="pill hidden app-only" id="creditPill" title="Remaining Suno API credits"><span class="dot"></span><span id="creditText">No key</span></span>
     <button class="btn sm hidden app-only" id="keyBtn" type="button" aria-label="Suno API key">🔑 <span id="keyBtnText">Add API key</span></button>
-    <span class="user-chip hidden app-only" id="userEmail"></span>
+    <button class="btn sm profile-btn hidden app-only" id="profileBtn" type="button" aria-label="Your profile">
+      <span class="avatar" id="headerAvatar" aria-hidden="true"></span><span class="name" id="profileName">Profile</span>
+    </button>
     <button class="btn sm hidden app-only" id="signOutBtn" type="button" aria-label="Sign out">⎋ <span id="signOutText">Sign out</span></button>
     <button class="btn sm icon-btn" id="themeBtn" type="button" aria-label="Toggle theme">◐</button>
   </div>
@@ -472,6 +493,44 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px
       <button class="btn ghost" type="button" id="forgetKey">Remove key</button>
       <button class="btn" value="cancel" type="button" id="cancelKey">Cancel</button>
       <button class="btn primary" type="submit" id="saveKey">Save &amp; verify</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Profile dialog -->
+<dialog id="profileDlg" aria-labelledby="profileTitle">
+  <form class="dlg" id="profileForm" novalidate>
+    <h2 id="profileTitle">Your profile</h2>
+    <p class="sub" id="profileSub">This is private to your account.</p>
+    <p class="signed-as">Signed in as <strong id="profileEmail"></strong></p>
+
+    <div class="avatar-row">
+      <div class="avatar lg" id="profileAvatar" aria-hidden="true"></div>
+      <div class="avatar-actions">
+        <label class="btn sm" for="avatarInput">Upload photo</label>
+        <input type="file" id="avatarInput" accept="image/png,image/jpeg,image/webp,image/gif" class="sr">
+        <button class="btn sm ghost" type="button" id="removeAvatarBtn">Remove</button>
+        <p class="hint">PNG, JPG, WebP or GIF, up to 2 MB.</p>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="label"><label for="displayName">Display name</label><span class="count" id="displayNameCount">0 / 50</span></div>
+      <input type="text" id="displayName" maxlength="50" autocomplete="nickname" placeholder="What should we call you?" required>
+    </div>
+    <div class="field">
+      <div class="label"><label for="bio">About you <span style="font-weight:400;color:var(--muted)">(optional)</span></label><span class="count" id="bioCount">0 / 280</span></div>
+      <textarea id="bio" maxlength="280" style="min-height:80px" placeholder="Bedroom producer, lo-fi lover, making a song a day…"></textarea>
+    </div>
+    <div class="field">
+      <div class="label"><span>Favorite genres <span style="font-weight:400;color:var(--muted)">(up to 10)</span></span></div>
+      <div class="chips" id="genreChips" role="group" aria-label="Favorite genres"></div>
+    </div>
+
+    <div class="dlg-actions">
+      <button class="btn ghost push" type="button" id="profileSignOut">Sign out</button>
+      <button class="btn ghost" type="button" id="profileCancel">Cancel</button>
+      <button class="btn primary" type="submit" id="profileSave">Save profile</button>
     </div>
   </form>
 </dialog>
@@ -1052,11 +1111,183 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px
     $("authEmail").focus(); $("authEmail").select();
   });
 
-  $("signOutBtn").addEventListener("click", async () => {
+  async function signOut() {
     sess.del(userKey("sunoKey"));
     if (sb) await sb.auth.signOut({ scope: "local" });
     showSignedOut();
     toast("Signed out.");
+  }
+  $("signOutBtn").addEventListener("click", signOut);
+  $("profileSignOut").addEventListener("click", signOut);
+
+  // ---------- profile ----------
+  const GENRES = ["pop", "hip hop", "r&b", "rock", "indie", "edm", "house", "lo-fi", "jazz", "classical",
+    "country", "folk", "metal", "punk", "latin", "k-pop", "afrobeats", "reggae", "cinematic", "synthwave"];
+  const AVATAR_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+  const AVATAR_MAX = 2 * 1024 * 1024;
+
+  let profile = null;        // { display_name, bio, favorite_genres, avatar_path } or null
+  let avatarUrl = null;      // signed URL for the saved photo
+  let pendingAvatar = null;  // { file, preview } chosen but not saved yet
+  let removeAvatar = false;
+  let profileCreateFlow = false;
+
+  const initials = (name, email) => {
+    const src = (name || email || "?").trim();
+    const parts = src.split(/[\s._@-]+/).filter(Boolean);
+    return ((parts[0] || "?")[0] + (parts.length > 1 && name ? parts[1][0] : "")).toUpperCase();
+  };
+
+  function paintAvatar(node, url, name, email) {
+    node.replaceChildren(url ? el("img", { src: url, alt: "" }) : document.createTextNode(initials(name, email)));
+  }
+
+  function renderProfileChip() {
+    const email = currentUser ? currentUser.email : "";
+    paintAvatar($("headerAvatar"), avatarUrl, profile && profile.display_name, email);
+    $("profileName").textContent = profile ? profile.display_name : "Create profile";
+    $("profileBtn").title = profile ? `${profile.display_name} (${email})` : email;
+  }
+
+  async function signedAvatarUrl(path) {
+    if (!path) return null;
+    const { data, error } = await sb.storage.from("avatars").createSignedUrl(path, 60 * 60 * 24);
+    return error ? null : data.signedUrl;
+  }
+
+  // Resolves true once we know whether a profile exists, false if loading failed.
+  async function loadProfile() {
+    const uid = currentUser && currentUser.id;
+    if (!uid || !sb) return false;
+    const { data, error } = await sb.from("profiles")
+      .select("display_name, bio, favorite_genres, avatar_path")
+      .eq("id", uid).maybeSingle();
+    if (!currentUser || currentUser.id !== uid) return false; // signed out meanwhile
+    if (error) { toast("Couldn't load your profile. Reload to try again.", true); return false; }
+    profile = data;
+    avatarUrl = data ? await signedAvatarUrl(data.avatar_path) : null;
+    renderProfileChip();
+    return true;
+  }
+
+  function clearPendingAvatar() {
+    if (pendingAvatar) URL.revokeObjectURL(pendingAvatar.preview);
+    pendingAvatar = null;
+  }
+
+  function paintDialogAvatar() {
+    const url = pendingAvatar ? pendingAvatar.preview : removeAvatar ? null : avatarUrl;
+    paintAvatar($("profileAvatar"), url, $("displayName").value, currentUser && currentUser.email);
+    $("removeAvatarBtn").classList.toggle("hidden", !url);
+  }
+
+  function selectedGenres() {
+    return [...$("genreChips").querySelectorAll('[aria-pressed="true"]')].map((b) => b.dataset.genre);
+  }
+
+  for (const g of GENRES) {
+    $("genreChips").append(el("button", {
+      type: "button", class: "chip genre-chip", text: g, "data-genre": g, "aria-pressed": "false",
+      onclick: (e) => {
+        const b = e.currentTarget;
+        const on = b.getAttribute("aria-pressed") === "true";
+        if (!on && selectedGenres().length >= 10) { toast("Pick up to 10 genres.", true); return; }
+        b.setAttribute("aria-pressed", String(!on));
+      },
+    }));
+  }
+
+  counter("displayName", "displayNameCount", 50);
+  counter("bio", "bioCount", 280);
+  $("displayName").addEventListener("input", () => { if (!pendingAvatar && (removeAvatar || !avatarUrl)) paintDialogAvatar(); });
+
+  function openProfile(isNew = false) {
+    profileCreateFlow = isNew;
+    clearPendingAvatar(); removeAvatar = false;
+    $("profileTitle").textContent = profile ? "Your profile" : "Create your profile";
+    $("profileSub").textContent = profile
+      ? "Only you can see this."
+      : "Welcome to Tunesmith! Set up your profile. Only you can see it.";
+    $("profileCancel").textContent = profile ? "Cancel" : "Skip for now";
+    $("profileEmail").textContent = currentUser ? currentUser.email : "";
+    $("displayName").value = profile ? profile.display_name : "";
+    $("bio").value = profile ? profile.bio : "";
+    for (const id of ["displayName", "bio"]) $(id).dispatchEvent(new Event("input"));
+    const chosen = new Set(profile ? profile.favorite_genres : []);
+    for (const b of $("genreChips").children) b.setAttribute("aria-pressed", String(chosen.has(b.dataset.genre)));
+    $("avatarInput").value = "";
+    paintDialogAvatar();
+    $("profileDlg").showModal();
+    $("displayName").focus();
+  }
+
+  $("profileBtn").addEventListener("click", () => openProfile(false));
+  $("profileCancel").addEventListener("click", () => $("profileDlg").close());
+  $("profileDlg").addEventListener("close", () => {
+    clearPendingAvatar();
+    // First-time setup continues to the Suno key prompt, whether saved or skipped.
+    if (profileCreateFlow && currentUser && !profile) store.set(userKey("profileSkipped"), true);
+    if (profileCreateFlow && currentUser && !apiKey) setTimeout(openKey, 150);
+    profileCreateFlow = false;
+  });
+
+  $("avatarInput").addEventListener("change", () => {
+    const file = $("avatarInput").files[0];
+    if (!file) return;
+    if (!AVATAR_TYPES.includes(file.type)) { toast("Use a PNG, JPG, WebP or GIF image.", true); $("avatarInput").value = ""; return; }
+    if (file.size > AVATAR_MAX) { toast("That image is over 2 MB. Pick a smaller one.", true); $("avatarInput").value = ""; return; }
+    clearPendingAvatar();
+    pendingAvatar = { file, preview: URL.createObjectURL(file) };
+    removeAvatar = false;
+    paintDialogAvatar();
+  });
+
+  $("removeAvatarBtn").addEventListener("click", () => {
+    clearPendingAvatar(); removeAvatar = true; $("avatarInput").value = ""; paintDialogAvatar();
+  });
+
+  $("profileForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const uid = currentUser && currentUser.id;
+    if (!uid) return;
+    const name = $("displayName").value.trim();
+    if (!name) { toast("Add a display name.", true); $("displayName").focus(); return; }
+
+    const btn = $("profileSave"); btn.disabled = true; btn.textContent = "Saving…";
+    const oldPath = profile ? profile.avatar_path : null;
+    let newPath = removeAvatar ? null : oldPath;
+    let uploaded = null;
+    try {
+      if (pendingAvatar) {
+        const ext = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif" }[pendingAvatar.file.type];
+        uploaded = `${uid}/avatar-${Date.now()}.${ext}`;
+        const { error } = await sb.storage.from("avatars").upload(uploaded, pendingAvatar.file, {
+          contentType: pendingAvatar.file.type, cacheControl: "3600", upsert: false,
+        });
+        if (error) { uploaded = null; throw new Error("Photo upload failed: " + error.message); }
+        newPath = uploaded;
+      }
+
+      const row = { id: uid, display_name: name, bio: $("bio").value.trim(), favorite_genres: selectedGenres(), avatar_path: newPath };
+      const { data, error } = await sb.from("profiles").upsert(row)
+        .select("display_name, bio, favorite_genres, avatar_path").single();
+      if (error) throw new Error("Couldn't save your profile: " + error.message);
+
+      const created = !profile;
+      profile = data;
+      if (newPath !== oldPath) {
+        avatarUrl = await signedAvatarUrl(newPath);
+        if (oldPath) sb.storage.from("avatars").remove([oldPath]); // tidy up, best effort
+      }
+      renderProfileChip();
+      $("profileDlg").close();
+      toast(created ? `Welcome, ${data.display_name}!` : "Profile saved.");
+    } catch (err) {
+      if (uploaded) sb.storage.from("avatars").remove([uploaded]);
+      toast(err.message, true);
+    } finally {
+      btn.disabled = false; btn.textContent = "Save profile";
+    }
   });
 
   // ---------- session handling ----------
@@ -1070,6 +1301,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px
   function showSignedOut(message) {
     currentUser = null;
     apiKey = ""; tasks = [];
+    profile = null; avatarUrl = null; clearPendingAvatar(); profileCreateFlow = false;
     $("creditPill").classList.remove("ok", "bad"); $("creditText").textContent = "No key";
     for (const d of document.querySelectorAll("dialog[open]")) d.close();
     $("lyricOptions").replaceChildren();
@@ -1092,14 +1324,20 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px
     setKey(remembered || sess.get(userKey("sunoKey")) || "", !!remembered);
     tasks = store.get(userKey("tasks"), []);
 
-    $("userEmail").textContent = user.email || "";
-    $("userEmail").title = user.email || "";
+    profile = null; avatarUrl = null;
+    renderProfileChip();
     authMsg("");
     setView(true);
     render();
     refreshCredits();
     if (apiKey) resumePolling();
-    else setTimeout(openKey, 300);
+    // New users set up a profile first, then add their Suno key.
+    loadProfile().then((loaded) => {
+      if (!currentUser || currentUser.id !== user.id || document.querySelector("dialog[open]")) return;
+      // Only offer "create" when we know there's no profile, so a failed load can't lead to overwriting one.
+      if (loaded && !profile && !store.get(userKey("profileSkipped"))) openProfile(true);
+      else if (!apiKey) openKey();
+    });
   }
 
   // Errors from an expired or reused email link arrive in the URL hash.

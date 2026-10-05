@@ -4,6 +4,7 @@ A one-page web app for making songs with the [Suno API](https://docs.sunoapi.org
 
 ## Features
 
+- **Profiles**: display name, profile photo, short bio and favorite genres. New users are asked to set one up on first sign-in (they can skip it). Each profile is private to its owner.
 - **Email sign-in** (Supabase passwordless email link). The same link creates the account on first use. Each signed-in user gets their own saved Suno key and song library in the browser.
 - **Simple mode**: describe a song and Suno writes the lyrics and music.
 - **Custom mode**: set a title, your own lyrics, style, vocal gender, styles to exclude, target length (10–360s), style weight, weirdness, audio weight and variety.
@@ -42,7 +43,10 @@ The key is saved in `localStorage` when "Remember on this device" is checked. Ot
 ## Supabase (login)
 
 - Project: `qnrjcyjipjtkitnzruiq`. Its URL and **publishable** key are in `public/index.html` and `netlify/functions/suno.mjs`. Both are public by design and safe to commit. No secret keys are used anywhere.
-- No database tables are needed for login. Supabase Auth stores users in its own `auth.users` table.
+- Supabase Auth stores users in its own `auth.users` table.
+- **Profiles** (`supabase/migrations/20261005194656_create_profiles_and_avatars.sql`, already applied to the project):
+  - `public.profiles` has one row per user: `display_name` (1–50 chars), `bio` (up to 280), `favorite_genres` (up to 10), `avatar_path`. Its access rules (row-level security) let each user read, create and update **only their own** row. Signed-out visitors have no access. The row is deleted automatically if the user's account is deleted.
+  - The private `avatars` storage bucket takes PNG/JPG/WebP/GIF images up to 2 MB. Each user can only read and write files in their own `avatars/<user id>/` folder. Photos are shown through signed links that expire.
 
 **One-time dashboard setup (required):**
 
