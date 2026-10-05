@@ -1,9 +1,10 @@
 # Tunesmith: AI music generator
 
-A one-page web app for making songs with the [Suno API](https://docs.sunoapi.org). Each user **enters their own Suno API key** in the app. The app has no server-side key, and each generation uses the credits of the person whose key it is.
+A one-page web app for making songs with the [Suno API](https://docs.sunoapi.org). Users **sign in with their email** (a one-time link from Supabase, no password), then **enter their own Suno API key** in the app. The app has no server-side key, and each generation uses the credits of the person whose key it is.
 
 ## Features
 
+- **Email sign-in** (Supabase passwordless email link). The same link creates the account on first use. Each signed-in user gets their own saved Suno key and song library in the browser.
 - **Simple mode**: describe a song and Suno writes the lyrics and music.
 - **Custom mode**: set a title, your own lyrics, style, vocal gender, styles to exclude, target length (10–360s), style weight, weirdness, audio weight and variety.
 - **AI lyric writer**: give it a theme, pick one of the suggested lyric options, and it fills the lyrics field.
@@ -22,7 +23,7 @@ netlify/functions/suno.mjs → small proxy at /api/* → https://api.sunoapi.org
 netlify.toml               → Netlify config
 ```
 
-The browser sends the user's key in an `x-suno-key` header to the Netlify Function. The function passes it to Suno as `Authorization: Bearer …` and does not store or log it. The proxy is there because:
+The browser sends the user's Supabase login token (`Authorization`) and Suno key (`x-suno-key`) to the Netlify Function. The function checks the login with Supabase first (it remembers a valid login for 60 seconds) and rejects requests that aren't signed in. It then passes the Suno key to Suno as `Authorization: Bearer …`. It does not store or log the token or the key. The proxy is there because:
 
 - Suno requires a `callBackUrl`. The function gives Suno `/api/callback`, which simply acknowledges the callback, and the app checks the task status on a timer instead.
 - It avoids browser CORS problems and cleans up request parameters (for example, it drops custom-mode-only fields when Simple mode is used).
@@ -37,6 +38,20 @@ The browser sends the user's key in an `x-suno-key` header to the Netlify Functi
 | `GET /api/credits`      | `GET /api/v1/generate/credit`        |
 
 The key is saved in `localStorage` when "Remember on this device" is checked. Otherwise it is kept in `sessionStorage` and cleared when the tab closes.
+
+## Supabase (login)
+
+- Project: `qnrjcyjipjtkitnzruiq`. Its URL and **publishable** key are in `public/index.html` and `netlify/functions/suno.mjs`. Both are public by design and safe to commit. No secret keys are used anywhere.
+- No database tables are needed for login. Supabase Auth stores users in its own `auth.users` table.
+
+**One-time dashboard setup (required):**
+
+1. **Authentication → URL Configuration**
+   - **Site URL:** `https://YOUR-SITE.netlify.app`
+   - **Redirect URLs:** add `https://YOUR-SITE.netlify.app/**` and, for local testing, `http://localhost:8888/**`
+
+   If you skip this, the sign-in links in emails point to `localhost:3000` and won't work.
+2. **Email delivery:** Supabase's built-in email sender only delivers to members of your Supabase team, and only a few emails per hour. That's enough for you to test, but before other people can sign in you need to set up **Authentication → Emails → SMTP Settings** with a provider such as [Resend](https://resend.com/docs/send-with-supabase-smtp) (free tier). Until then, other people get the error "This email can't receive sign-in links yet."
 
 ## Deploy to Netlify
 

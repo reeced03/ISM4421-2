@@ -93,7 +93,7 @@ header {
 @media (max-width: 520px) {
   .bar { gap: 8px; }
   .brand { font-size: 18px; }
-  #keyBtnText { display: none; }
+  #keyBtnText, #signOutText { display: none; }
   .pill { padding: 6px 10px; }
 }
 @media (max-width: 360px) { .brand .name { display: none; } }
@@ -268,6 +268,23 @@ dialog::backdrop { background: rgba(10,8,20,.55); backdrop-filter: blur(2px); }
 
 footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px 0 40px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* Auth */
+.auth { min-height: calc(100vh - 61px); display: grid; place-items: center; padding: 32px 16px; }
+.auth-card { width: min(420px, 100%); padding: 28px; }
+.auth-card .logo { width: 44px; height: 44px; border-radius: 12px; font-size: 22px; margin-bottom: 16px; }
+.auth-card h1 { font: 700 24px/1.2 "Space Grotesk", Inter, sans-serif; margin: 0 0 6px; letter-spacing: -.01em; }
+.auth-card .sub { margin-bottom: 20px; font-size: 14px; }
+.auth-card .btn.block { margin-top: 4px; }
+.auth-msg { font-size: 13px; border-radius: 10px; padding: 10px 12px; margin-bottom: 16px; }
+.auth-msg.err { color: var(--err); background: color-mix(in srgb, var(--err) 10%, transparent); }
+.auth-msg.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.sent-icon { font-size: 36px; margin-bottom: 8px; }
+.auth-links { display: flex; justify-content: space-between; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.linkish { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font-size: 13px; font-weight: 500; }
+.linkish:disabled { color: var(--muted); cursor: default; }
+.user-chip { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 13px; }
+@media (max-width: 640px) { .user-chip { display: none; } }
 </style>
 </head>
 <body>
@@ -276,13 +293,42 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px
   <div class="wrap bar">
     <div class="brand"><div class="logo" aria-hidden="true">♪</div><span class="name">Tunesmith</span></div>
     <div class="spacer"></div>
-    <span class="pill" id="creditPill" title="Remaining Suno API credits"><span class="dot"></span><span id="creditText">No key</span></span>
-    <button class="btn sm" id="keyBtn" type="button" aria-label="Suno API key">🔑 <span id="keyBtnText">Add API key</span></button>
+    <span class="pill hidden app-only" id="creditPill" title="Remaining Suno API credits"><span class="dot"></span><span id="creditText">No key</span></span>
+    <button class="btn sm hidden app-only" id="keyBtn" type="button" aria-label="Suno API key">🔑 <span id="keyBtnText">Add API key</span></button>
+    <span class="user-chip hidden app-only" id="userEmail"></span>
+    <button class="btn sm hidden app-only" id="signOutBtn" type="button" aria-label="Sign out">⎋ <span id="signOutText">Sign out</span></button>
     <button class="btn sm icon-btn" id="themeBtn" type="button" aria-label="Toggle theme">◐</button>
   </div>
 </header>
 
-<main class="wrap">
+<section class="auth hidden" id="authView" aria-labelledby="authTitle">
+  <div class="card auth-card">
+    <div class="logo" aria-hidden="true">♪</div>
+    <div id="authMsg" class="auth-msg hidden" role="alert"></div>
+
+    <form id="signInForm" novalidate>
+      <h1 id="authTitle">Sign in to Tunesmith</h1>
+      <p class="sub">Enter your email and we'll send you a sign-in link. No password needed. New here? The same link creates your account.</p>
+      <div class="field">
+        <label for="authEmail">Email</label>
+        <input type="text" inputmode="email" id="authEmail" autocomplete="email" spellcheck="false" placeholder="you@example.com" required>
+      </div>
+      <button class="btn primary block" type="submit" id="sendLinkBtn">Email me a sign-in link</button>
+    </form>
+
+    <div id="sentView" class="hidden">
+      <div class="sent-icon" aria-hidden="true">📬</div>
+      <h1>Check your inbox</h1>
+      <p class="sub">We sent a sign-in link to <strong id="sentEmail"></strong>. Open it in this browser to finish signing in. It can take a minute, and may land in spam.</p>
+      <div class="auth-links">
+        <button class="linkish" type="button" id="resendBtn">Resend link</button>
+        <button class="linkish" type="button" id="changeEmailBtn">Use a different email</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<main class="wrap hidden" id="appView">
   <div class="grid">
     <!-- Create -->
     <section class="card card-pad create" aria-labelledby="createTitle">
@@ -409,7 +455,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px
   </div>
 </main>
 
-<footer class="wrap">Powered by the <a href="https://docs.sunoapi.org" target="_blank" rel="noopener">Suno API</a>. Your key stays in your browser and is only sent to generate music.</footer>
+<footer class="wrap hidden" id="appFooter">Powered by the <a href="https://docs.sunoapi.org" target="_blank" rel="noopener">Suno API</a>. Your key stays in your browser and is only sent to generate music.</footer>
 
 <!-- API key dialog -->
 <dialog id="keyDlg" aria-labelledby="keyTitle">
@@ -460,6 +506,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px
 
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script>
 (() => {
   "use strict";
@@ -506,16 +553,29 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px
     applyTheme(next); store.set("theme", next);
   });
 
+  // ---------- Supabase auth ----------
+  // Public project values: the publishable key is meant to ship to browsers.
+  const SUPABASE_URL = "https://qnrjcyjipjtkitnzruiq.supabase.co";
+  const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_w8EYKt3GaUWwq0cvECka1Q__J9xJfbT";
+  const sb = window.supabase
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+      })
+    : null;
+  let currentUser = null;
+
+  // Each signed-in user gets their own Suno key and library in this browser.
+  const userKey = (k) => `${k}:${currentUser ? currentUser.id : "anon"}`;
+
   // ---------- API key ----------
-  let apiKey = store.get("sunoKey") || sess.get("sunoKey") || "";
+  let apiKey = "";
 
   function setKey(k, remember) {
     apiKey = k;
-    store.del("sunoKey"); sess.del("sunoKey");
-    if (k) remember ? store.set("sunoKey", k) : sess.set("sunoKey", k);
+    store.del(userKey("sunoKey")); sess.del(userKey("sunoKey"));
+    if (k) remember ? store.set(userKey("sunoKey"), k) : sess.set(userKey("sunoKey"), k);
     $("keyBtnText").textContent = k ? "API key" : "Add API key";
   }
-  setKey(apiKey, !!store.get("sunoKey"));
 
   const codeMessages = {
     400: "Invalid parameters.", 401: "Invalid API key.", 404: "Endpoint not found.",
@@ -524,18 +584,37 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px
     455: "Suno API is under maintenance.", 500: "Suno server error.",
   };
 
+  async function accessToken() {
+    if (!sb) return null;
+    const { data } = await sb.auth.getSession();
+    return data && data.session ? data.session.access_token : null;
+  }
+
   async function api(path, { method = "GET", body } = {}) {
-    if (!apiKey) { openKey(); throw new Error("Add your Suno API key first."); }
+    if (!currentUser) { const err = new Error("Please sign in."); err.code = 401; throw err; }
+    if (!apiKey) { openKey(); const err = new Error("Add your Suno API key first."); err.code = 401; throw err; }
+    const token = await accessToken();
+    if (!token) { showSignedOut("Your session ended. Please sign in again."); const err = new Error("Please sign in again."); err.code = 401; throw err; }
     let res, data;
     try {
       res = await fetch("/api/" + path, {
         method,
-        headers: { "x-suno-key": apiKey, ...(body ? { "content-type": "application/json" } : {}) },
+        headers: {
+          authorization: "Bearer " + token,
+          "x-suno-key": apiKey,
+          ...(body ? { "content-type": "application/json" } : {}),
+        },
         body: body ? JSON.stringify(body) : undefined,
       });
       data = await res.json();
     } catch {
       throw new Error("Network error — check your connection.");
+    }
+    if (data && data.auth === false) {
+      // Our server rejected the login (expired or revoked), not the Suno key.
+      if (sb) sb.auth.signOut({ scope: "local" });
+      showSignedOut("Your session ended. Please sign in again.");
+      const err = new Error(data.msg || "Please sign in again."); err.code = 401; throw err;
     }
     if (!data || data.code !== 200) {
       const code = data && data.code;
@@ -547,14 +626,15 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px
 
   async function refreshCredits() {
     const pill = $("creditPill");
-    if (!apiKey) { pill.className = "pill"; $("creditText").textContent = "No key"; return false; }
+    const setPill = (state) => { pill.classList.remove("ok", "bad"); if (state) pill.classList.add(state); };
+    if (!apiKey) { setPill(""); $("creditText").textContent = "No key"; return false; }
     try {
       const credits = await api("credits");
-      pill.className = "pill ok";
+      setPill("ok");
       $("creditText").textContent = `${Number(credits).toLocaleString()} credits`;
       return true;
     } catch (e) {
-      pill.className = "pill bad";
+      setPill("bad");
       $("creditText").textContent = e.code === 401 ? "Invalid key" : "Credits unavailable";
       return e.code !== 401;
     }
@@ -563,7 +643,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px
   const keyDlg = $("keyDlg");
   function openKey() {
     $("keyInput").value = apiKey;
-    $("rememberKey").checked = apiKey ? !!store.get("sunoKey") : true;
+    $("rememberKey").checked = apiKey ? !!store.get(userKey("sunoKey")) : true;
     $("forgetKey").classList.toggle("hidden", !apiKey);
     keyDlg.showModal();
     $("keyInput").focus();
@@ -576,7 +656,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px
     const k = $("keyInput").value.trim();
     if (!k) { $("keyInput").focus(); return; }
     const btn = $("saveKey"); btn.disabled = true; btn.textContent = "Verifying…";
-    const prev = apiKey, prevRemember = !!store.get("sunoKey");
+    const prev = apiKey, prevRemember = !!store.get(userKey("sunoKey"));
     setKey(k, $("rememberKey").checked);
     const ok = await refreshCredits();
     btn.disabled = false; btn.textContent = "Save & verify";
@@ -685,8 +765,8 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px
   });
 
   // ---------- library ----------
-  let tasks = store.get("tasks", []);
-  const saveTasks = () => store.set("tasks", tasks.slice(0, 50));
+  let tasks = [];
+  const saveTasks = () => { if (currentUser) store.set(userKey("tasks"), tasks.slice(0, 50)); };
   const polling = new Set();
 
   const FAIL_STATES = ["CREATE_TASK_FAILED", "GENERATE_AUDIO_FAILED", "CALLBACK_EXCEPTION", "SENSITIVE_WORD_ERROR"];
@@ -769,7 +849,7 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px
     try {
       while (true) {
         const t = tasks.find((x) => x.id === id);
-        if (!t || isDone(t)) return;
+        if (!currentUser || !t || isDone(t)) return;
         if (Date.now() - t.created > 15 * 60 * 1000) { t.status = "TIMEOUT"; t.error = "No result after 15 minutes."; break; }
         let info;
         try {
@@ -897,10 +977,168 @@ footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px
     }
   });
 
-  // ---------- boot ----------
-  render();
-  if (apiKey) { refreshCredits(); resumePolling(); }
-  else setTimeout(openKey, 300);
+  // ---------- sign-in screen ----------
+  const authMsg = (text, kind = "err") => {
+    const m = $("authMsg");
+    m.textContent = text || "";
+    m.className = "auth-msg " + kind + (text ? "" : " hidden");
+  };
+
+  const friendlyAuthError = (e) => {
+    const msg = (e && e.message) || "";
+    if (/not authorized/i.test(msg)) return "This email can't receive sign-in links yet. The site owner needs to finish email setup.";
+    if (/rate limit|security purposes|only request this after/i.test(msg)) return "Too many sign-in emails were requested. Wait a minute and try again.";
+    if (/invalid.*email|email.*invalid|validate email/i.test(msg)) return "That doesn't look like a valid email address.";
+    if (/fetch|network/i.test(msg)) return "Couldn't reach the sign-in service. Check your connection.";
+    return msg || "Something went wrong. Please try again.";
+  };
+
+  let sentTo = "";
+  let cooldownTimer = null;
+  function startCooldown(seconds = 60) {
+    const btn = $("resendBtn");
+    clearInterval(cooldownTimer);
+    let left = seconds;
+    const tick = () => {
+      btn.disabled = left > 0;
+      btn.textContent = left > 0 ? `Resend link in ${left}s` : "Resend link";
+      if (left-- <= 0) clearInterval(cooldownTimer);
+    };
+    tick();
+    cooldownTimer = setInterval(tick, 1000);
+  }
+
+  async function sendLink(email) {
+    const { error } = await sb.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: location.origin + location.pathname },
+    });
+    if (error) throw error;
+  }
+
+  function showSentView(show) {
+    $("signInForm").classList.toggle("hidden", show);
+    $("sentView").classList.toggle("hidden", !show);
+  }
+
+  $("signInForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = $("authEmail").value.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { authMsg("Enter a valid email address."); $("authEmail").focus(); return; }
+    const btn = $("sendLinkBtn"); btn.disabled = true; btn.textContent = "Sending…";
+    authMsg("");
+    try {
+      await sendLink(email);
+      sentTo = email;
+      $("sentEmail").textContent = email;
+      showSentView(true);
+      startCooldown();
+    } catch (err) {
+      authMsg(friendlyAuthError(err));
+    } finally {
+      btn.disabled = false; btn.textContent = "Email me a sign-in link";
+    }
+  });
+
+  $("resendBtn").addEventListener("click", async () => {
+    authMsg("");
+    $("resendBtn").disabled = true;
+    try { await sendLink(sentTo); authMsg("A new link is on its way.", "ok"); startCooldown(); }
+    catch (err) { authMsg(friendlyAuthError(err)); $("resendBtn").disabled = false; }
+  });
+
+  $("changeEmailBtn").addEventListener("click", () => {
+    authMsg(""); showSentView(false); clearInterval(cooldownTimer);
+    $("authEmail").focus(); $("authEmail").select();
+  });
+
+  $("signOutBtn").addEventListener("click", async () => {
+    sess.del(userKey("sunoKey"));
+    if (sb) await sb.auth.signOut({ scope: "local" });
+    showSignedOut();
+    toast("Signed out.");
+  });
+
+  // ---------- session handling ----------
+  function setView(signedIn) {
+    $("authView").classList.toggle("hidden", signedIn);
+    $("appView").classList.toggle("hidden", !signedIn);
+    $("appFooter").classList.toggle("hidden", !signedIn);
+    for (const n of document.querySelectorAll(".app-only")) n.classList.toggle("hidden", !signedIn);
+  }
+
+  function showSignedOut(message) {
+    currentUser = null;
+    apiKey = ""; tasks = [];
+    $("creditPill").classList.remove("ok", "bad"); $("creditText").textContent = "No key";
+    for (const d of document.querySelectorAll("dialog[open]")) d.close();
+    $("lyricOptions").replaceChildren();
+    setView(false);
+    showSentView(false);
+    authMsg(message || "");
+  }
+
+  function showSignedIn(user) {
+    if (currentUser && currentUser.id === user.id) return; // token refresh, nothing to redo
+    currentUser = user;
+
+    // Adopt data saved before login existed (first account to sign in on this browser).
+    const legacyKey = store.get("sunoKey"), legacyTasks = store.get("tasks");
+    if (legacyKey && !store.get(userKey("sunoKey"))) store.set(userKey("sunoKey"), legacyKey);
+    if (legacyTasks && !store.get(userKey("tasks"))) store.set(userKey("tasks"), legacyTasks);
+    store.del("sunoKey"); store.del("tasks");
+
+    const remembered = store.get(userKey("sunoKey"));
+    setKey(remembered || sess.get(userKey("sunoKey")) || "", !!remembered);
+    tasks = store.get(userKey("tasks"), []);
+
+    $("userEmail").textContent = user.email || "";
+    $("userEmail").title = user.email || "";
+    authMsg("");
+    setView(true);
+    render();
+    refreshCredits();
+    if (apiKey) resumePolling();
+    else setTimeout(openKey, 300);
+  }
+
+  // Errors from an expired or reused email link arrive in the URL hash.
+  function readLinkError() {
+    const raw = location.hash.startsWith("#") ? location.hash.slice(1) : "";
+    const params = new URLSearchParams(raw || location.search.slice(1));
+    const desc = params.get("error_description");
+    if (!desc) return "";
+    history.replaceState(null, "", location.pathname);
+    return /expired|invalid/i.test(desc)
+      ? "That sign-in link has expired or was already used. Request a new one below."
+      : desc.replace(/\+/g, " ");
+  }
+
+  async function boot() {
+    const linkError = readLinkError();
+    if (!sb) {
+      setView(false);
+      $("sendLinkBtn").disabled = true;
+      authMsg("Couldn't load the sign-in service. Check your connection and reload the page.");
+      return;
+    }
+    // Defer work out of the callback, as the Supabase docs advise.
+    // The initial state is handled below; this only reacts to later changes
+    // (sign-in from another tab, sign-out, session expiry).
+    sb.auth.onAuthStateChange((_event, session) => {
+      setTimeout(() => {
+        if (session && session.user) showSignedIn(session.user);
+        else if (currentUser) showSignedOut();
+      }, 0);
+    });
+    const { data } = await sb.auth.getSession();
+    if (data && data.session) showSignedIn(data.session.user);
+    else showSignedOut(linkError);
+    // Clean the token out of the address bar after a magic-link sign-in.
+    if (/access_token|refresh_token/.test(location.hash)) history.replaceState(null, "", location.pathname);
+  }
+
+  boot();
 })();
 </script>
 </body>

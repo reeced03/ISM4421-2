@@ -1,8 +1,43 @@
 // Thin proxy between the browser and https://api.sunoapi.org.
-// The user's own API key arrives in the `x-suno-key` header on every request
-// and is forwarded as a Bearer token. It is never stored or logged here.
+// Every request must carry a signed-in Supabase user's access token in
+// `Authorization`. The user's own Suno API key arrives in the `x-suno-key`
+// header and is forwarded as a Bearer token. Neither is stored or logged here.
 
 const SUNO_BASE = "https://api.sunoapi.org";
+
+// Public project values (safe to commit). Override via Netlify env vars if the
+// Supabase project ever changes.
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://qnrjcyjipjtkitnzruiq.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY =
+  process.env.SUPABASE_PUBLISHABLE_KEY || "sb_publishable_w8EYKt3GaUWwq0cvECka1Q__J9xJfbT";
+
+// Status polling hits this function every few seconds, so remember verified
+// tokens briefly instead of asking Supabase each time.
+const verified = new Map();
+const VERIFY_TTL_MS = 60_000;
+
+async function verifyUser(req) {
+  const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  if (!token) return null;
+
+  const now = Date.now();
+  const hit = verified.get(token);
+  if (hit && hit.until > now) return hit.user;
+
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { apikey: SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    verified.delete(token);
+    return null;
+  }
+  const user = await res.json();
+  if (!user || !user.id) return null;
+
+  if (verified.size > 500) verified.clear();
+  verified.set(token, { user, until: now + VERIFY_TTL_MS });
+  return user;
+}
 
 const MODELS = ["V6", "V6_WILD", "V6_MINI", "V5_5", "V5", "V4_5PLUS", "V4_5ALL", "V4_5", "V4"];
 const DURATION_MODELS = ["V6", "V6_WILD", "V6_MINI", "V5_5"];
@@ -120,6 +155,14 @@ export default async (req) => {
 
   const route = ROUTES[`${req.method} ${action}`];
   if (!route) return fail("Not found", 404);
+
+  let user;
+  try {
+    user = await verifyUser(req);
+  } catch {
+    return fail("Could not verify your login. Try again shortly.", 502);
+  }
+  if (!user) return json({ code: 401, msg: "Please sign in again.", data: null, auth: false }, 401);
 
   const key = (req.headers.get("x-suno-key") || "").trim();
   if (!key) return fail("Enter your Suno API key first.", 401);
